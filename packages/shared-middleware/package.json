@@ -1,0 +1,23 @@
+{
+  "name": "@civicpulse/shared-middleware",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "node ../../node_modules/typescript/bin/tsc",
+    "dev": "node ../../node_modules/typescript/bin/tsc --watch",
+    "lint": "node ../../node_modules/typescript/bin/tsc --noEmit"
+  },
+  "dependencies": {
+    "@civicpulse/shared-types": "*",
+    "express": "^4.19.2",
+    "uuid": "^9.0.0",
+    "winston": "^3.13.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/uuid": "^9.0.8",
+    "typescript": "^5.4.0"
+  }
+}

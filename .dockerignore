@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+.git
+.turbo
+dist
+**/dist
+.next
+**/.next
+coverage
+**/coverage
+*.log
+*.tsbuildinfo
+**/*.tsbuildinfo
+PROMPT_7_EXECUTION.md
+PROMPTS_5_6_EXECUTION.md

@@ -1,0 +1,33 @@
+{
+  "name": "@civicpulse/notification-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm run prisma:generate && node ../../node_modules/typescript/bin/tsc",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "start": "node dist/server.js",
+    "lint": "npm run prisma:generate && node ../../node_modules/typescript/bin/tsc --noEmit",
+    "test": "echo 'no tests yet'",
+    "prisma:generate": "prisma generate --schema=./prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=./prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema=./prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@civicpulse/shared-middleware": "*",
+    "@civicpulse/shared-redis": "*",
+    "@civicpulse/shared-types": "*",
+    "@prisma/client": "5.22.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "nodemailer": "^6.9.8",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "@types/nodemailer": "^6.4.14",
+    "prisma": "5.22.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.0"
+  }
+}

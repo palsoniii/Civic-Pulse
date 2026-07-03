@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REJECTED
+}
+
+enum Category {
+  POTHOLE
+  GARBAGE
+  WATER_LEAK
+  STREETLIGHT
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────
+
+model Complaint {
+  id          String          @id @default(uuid())
+  reporterId  String          // user_id from User Service — intentionally no FK constraint
+  category    Category
+  description String
+  lat         Float
+  lng         Float
+  status      ComplaintStatus @default(OPEN)
+  priority    Priority        @default(MEDIUM)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  history     StatusHistory[]
+  assignments Assignment[]
+  mediaRefs   MediaRef[]
+  outboxEvents Outbox[]
+}
+
+model StatusHistory {
+  id          String          @id @default(uuid())
+  complaintId String
+  complaint   Complaint       @relation(fields: [complaintId], references: [id])
+  fromStatus  ComplaintStatus
+  toStatus    ComplaintStatus
+  changedBy   String
+  reason      String?
+  changedAt   DateTime        @default(now())
+}
+
+model Assignment {
+  id           String    @id @default(uuid())
+  complaintId  String
+  complaint    Complaint @relation(fields: [complaintId], references: [id])
+  departmentId String
+  assignedBy   String
+  assignedAt   DateTime  @default(now())
+}
+
+model MediaRef {
+  id           String    @id @default(uuid())
+  complaintId  String
+  complaint    Complaint @relation(fields: [complaintId], references: [id])
+  mediaUrl     String
+  thumbnailUrl String?
+  mediaType    String
+}
+
+model Outbox {
+  id          String     @id @default(uuid())
+  complaintId String?
+  complaint   Complaint? @relation(fields: [complaintId], references: [id])
+  eventType   String
+  payload     String     // JSON string — full AppEvent envelope
+  published   Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  publishedAt DateTime?
+}

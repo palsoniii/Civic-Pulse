@@ -1,0 +1,54 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Department {
+  id           String       @id @default(uuid())
+  name         String       @unique
+  zone         String
+  contactEmail String
+  createdAt    DateTime     @default(now())
+  adminUsers   AdminUser[]
+  assignments  Assignment[]
+}
+
+model AdminUser {
+  id           String     @id @default(uuid())
+  userId       String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  level        PermLevel  @default(OFFICER)
+  createdAt    DateTime   @default(now())
+}
+
+model Assignment {
+  id           String     @id @default(uuid())
+  complaintId  String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  assignedBy   String
+  assignedAt   DateTime   @default(now())
+
+  @@index([complaintId])
+  @@index([departmentId])
+}
+
+model SlaRule {
+  id              String @id @default(uuid())
+  category        String
+  priority        String
+  resolutionHours Int
+
+  @@unique([category, priority], name: "category_priority")
+}
+
+enum PermLevel {
+  OFFICER
+  MANAGER
+  DIRECTOR
+}

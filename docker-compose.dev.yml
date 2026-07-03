@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  gateway:
+    command: npx ts-node-dev --respawn --transpile-only apps/gateway/src/server.ts
+    volumes:
+      - ./apps/gateway/src:/app/apps/gateway/src
+      - ./apps/gateway/tsconfig.json:/app/apps/gateway/tsconfig.json
+      - ./tsconfig.json:/app/tsconfig.json
+
+  user-service:
+    command: npx ts-node-dev --respawn --transpile-only apps/user-service/src/server.ts
+    volumes:
+      - ./apps/user-service/src:/app/apps/user-service/src
+      - ./apps/user-service/prisma:/app/apps/user-service/prisma
+      - ./apps/user-service/tsconfig.json:/app/apps/user-service/tsconfig.json
+      - ./tsconfig.json:/app/tsconfig.json
+
+  complaint-service:
+    command: npx ts-node-dev --respawn --transpile-only apps/complaint-service/src/server.ts
+    volumes:
+      - ./apps/complaint-service/src:/app/apps/complaint-service/src
+      - ./apps/complaint-service/prisma:/app/apps/complaint-service/prisma
+      - ./apps/complaint-service/tsconfig.json:/app/apps/complaint-service/tsconfig.json
+      - ./tsconfig.json:/app/tsconfig.json
+
+  admin-service:
+    command: npx ts-node-dev --respawn --transpile-only apps/admin-service/src/server.ts
+    volumes:
+      - ./apps/admin-service/src:/app/apps/admin-service/src
+      - ./apps/admin-service/prisma:/app/apps/admin-service/prisma
+      - ./apps/admin-service/tsconfig.json:/app/apps/admin-service/tsconfig.json
+      - ./tsconfig.json:/app/tsconfig.json
+
+  notification-service:
+    command: npx ts-node-dev --respawn --transpile-only apps/notification-service/src/server.ts
+    volumes:
+      - ./apps/notification-service/src:/app/apps/notification-service/src
+      - ./apps/notification-service/prisma:/app/apps/notification-service/prisma
+      - ./apps/notification-service/tsconfig.json:/app/apps/notification-service/tsconfig.json
+      - ./tsconfig.json:/app/tsconfig.json
+
+  media-service:
+    command: npx ts-node-dev --respawn --transpile-only apps/media-service/src/server.ts
+    volumes:
+      - ./apps/media-service/src:/app/apps/media-service/src
+      - ./apps/media-service/tsconfig.json:/app/apps/media-service/tsconfig.json
+      - ./tsconfig.json:/app/tsconfig.json
+
+  web:
+    command: npm run dev --workspace=apps/web
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./packages/ui:/app/packages/ui
+      - ./packages/typescript-config:/app/packages/typescript-config

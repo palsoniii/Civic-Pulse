@@ -1,0 +1,21 @@
+{
+  "name": "civicpulse",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "npm run build --workspace=packages/shared-types && npm run build --workspace=packages/shared-middleware && npm run build --workspace=packages/shared-redis && npm run build --workspace=apps/gateway && node ./node_modules/prisma/build/index.js generate --schema=./apps/user-service/prisma/schema.prisma && npm run build --workspace=apps/user-service && node ./node_modules/prisma/build/index.js generate --schema=./apps/complaint-service/prisma/schema.prisma && npm run build --workspace=apps/complaint-service && node ./node_modules/prisma/build/index.js generate --schema=./apps/admin-service/prisma/schema.prisma && npm run build --workspace=apps/admin-service && node ./node_modules/prisma/build/index.js generate --schema=./apps/notification-service/prisma/schema.prisma && npm run build --workspace=apps/notification-service && npm run build --workspace=apps/media-service && npm run build --workspace=apps/web",
+    "test": "turbo run test",
+    "lint": "npm run lint --workspace=packages/shared-types && npm run lint --workspace=packages/shared-middleware && npm run lint --workspace=packages/shared-redis && npm run lint --workspace=apps/gateway && node ./node_modules/prisma/build/index.js generate --schema=./apps/user-service/prisma/schema.prisma && npm run lint --workspace=apps/user-service && node ./node_modules/prisma/build/index.js generate --schema=./apps/complaint-service/prisma/schema.prisma && npm run lint --workspace=apps/complaint-service && node ./node_modules/prisma/build/index.js generate --schema=./apps/admin-service/prisma/schema.prisma && npm run lint --workspace=apps/admin-service && node ./node_modules/prisma/build/index.js generate --schema=./apps/notification-service/prisma/schema.prisma && npm run lint --workspace=apps/notification-service && npm run lint --workspace=apps/media-service && npm run lint --workspace=apps/web",
+    "test:integration": "bash ./scripts/smoke-test.sh"
+  },
+  "packageManager": "npm@10.9.4",
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  }
+}

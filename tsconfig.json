@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "commonjs",
+    "lib": ["ES2021"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "outDir": "dist",
+    "paths": {
+  "@civicpulse/shared-types": ["packages/shared-types/src"],
+  "@civicpulse/shared-middleware": ["packages/shared-middleware/src"],
+  "@civicpulse/shared-redis": ["packages/shared-redis/src"]
+},
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "exclude": ["node_modules", "dist"]
+}
