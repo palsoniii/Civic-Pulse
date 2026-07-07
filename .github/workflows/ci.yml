@@ -45,6 +45,74 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Create service env files for CI
+        run: |
+          cat > .env.user-service <<'EOF'
+          PORT=3001
+          NODE_ENV=test
+          DATABASE_URL=postgresql://civicpulse:civicpulse_secret@postgres-users:5432/users_db
+          REDIS_URL=redis://redis:6379
+          JWT_SECRET=ci_jwt_secret_for_civicpulse
+          JWT_EXPIRY=15m
+          LOG_LEVEL=info
+          EOF
+
+          cat > .env.complaint-service <<'EOF'
+          PORT=3002
+          NODE_ENV=test
+          DATABASE_URL=postgresql://civicpulse:civicpulse_secret@postgres-complaints:5432/complaints_db
+          REDIS_URL=redis://redis:6379
+          LOG_LEVEL=info
+          EOF
+
+          cat > .env.admin-service <<'EOF'
+          PORT=3003
+          NODE_ENV=test
+          DATABASE_URL=postgresql://civicpulse:civicpulse_secret@postgres-admin:5432/admin_db
+          REDIS_URL=redis://redis:6379
+          COMPLAINT_SERVICE_URL=http://complaint-service:3002
+          LOG_LEVEL=info
+          EOF
+
+          cat > .env.notification-service <<'EOF'
+          PORT=3004
+          NODE_ENV=test
+          DATABASE_URL=postgresql://civicpulse:civicpulse_secret@postgres-notifications:5432/notifications_db
+          REDIS_URL=redis://redis:6379
+          SMTP_HOST=smtp.ethereal.email
+          SMTP_PORT=587
+          SMTP_USER=
+          SMTP_PASS=
+          FROM_EMAIL=noreply@civicpulse.local
+          POD_ID=1
+          LOG_LEVEL=info
+          EOF
+
+          cat > .env.media-service <<'EOF'
+          PORT=3005
+          NODE_ENV=test
+          REDIS_URL=redis://redis:6379
+          LOG_LEVEL=info
+          EOF
+
+          cat > .env.gateway <<'EOF'
+          PORT=3000
+          NODE_ENV=test
+          REDIS_URL=redis://redis:6379
+          JWT_SECRET=ci_jwt_secret_for_civicpulse
+          USER_SERVICE_URL=http://user-service:3001
+          COMPLAINT_SERVICE_URL=http://complaint-service:3002
+          ADMIN_SERVICE_URL=http://admin-service:3003
+          NOTIFICATION_SERVICE_URL=http://notification-service:3004
+          MEDIA_SERVICE_URL=http://media-service:3005
+          ALLOWED_ORIGINS=http://localhost:5173
+          LOG_LEVEL=info
+          EOF
+
+          cat > .env.web <<'EOF'
+          NODE_ENV=test
+          PORT=5173
+          EOF
       - run: docker compose up -d --build
       - run: bash ./scripts/smoke-test.sh
       - if: always()
