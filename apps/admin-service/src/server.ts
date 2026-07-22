@@ -3,7 +3,6 @@ import { createLogger } from "@civicpulse/shared-middleware";
 import { buildApp } from "./app";
 import { env } from "./config/env";
 import { prisma } from "./prisma/client";
-import { startTestConsumer } from "./events/test-consumer";
 
 const logger = createLogger("admin-service");
 
@@ -14,12 +13,6 @@ async function main(): Promise<void> {
     const server = app.listen(port, () => {
         logger.info("Admin service started", { port });
     });
-
-    if (env.NODE_ENV === "development") {
-        startTestConsumer().catch((error) => {
-            logger.error("Failed to start admin test consumer", { err: String(error) });
-        });
-    }
 
     const shutdown = async (signal: string): Promise<void> => {
         logger.info("Shutting down admin service", { signal });
