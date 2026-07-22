@@ -1,8 +1,20 @@
+<div align="center">
+
 # CivicPulse
 
 **A microservices-based civic complaint and infrastructure resolution platform.**
 
 CivicPulse models the full lifecycle of a municipal complaint system — citizens report civic issues (potholes, water leaks, streetlight failures), the platform routes them through department assignment, tracks SLA compliance, and notifies citizens as status changes. Built as five independently deployable Node.js services behind a single API gateway, with Redis Streams driving async workflows and per-service PostgreSQL databases enforcing domain isolation.
+
+[![Node.js](https://img.shields.io/badge/Node.js-Express%204-339933?logo=node.js&logoColor=white)](https://expressjs.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%20%7C%20Prisma%205-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-Streams-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![React](https://img.shields.io/badge/React-19%20%7C%20Vite-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+</div>
 
 ---
 
@@ -10,6 +22,7 @@ CivicPulse models the full lifecycle of a municipal complaint system — citizen
 
 - [Problem Statement](#problem-statement)
 - [Architecture](#architecture)
+- [Database Design](#database-design)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Repository Structure](#repository-structure)
@@ -34,28 +47,37 @@ The domain model enforces a strict complaint lifecycle state machine (`OPEN → 
 
 ## Architecture
 
-Single public entry point (gateway) fronting five isolated backend services, each with its own database:
+A single public entry point (the gateway) fronts five isolated backend services, each owning its own database. The gateway is the only trust boundary: it verifies the JWT, strips the raw `Authorization` header, and injects trusted internal headers (`x-user-id`, `x-user-role`, `x-internal-service`) before proxying — downstream services never see a raw token, they just check that the request came from the gateway.
 
-```text
-Browser / API Client
-        |
-        v
-apps/gateway (Express, :3000)
-        |
-        |-- /api/v1/users          -> user-service (:3001)     [register/login public, rest authenticated]
-        |-- /api/v1/complaints     -> complaint-service (:3002) [authenticated]
-        |-- /api/v1/admin          -> admin-service (:3003)     [ADMIN / SUPERADMIN only]
-        |-- /api/v1/notifications  -> notification-service (:3004) [authenticated]
-        `-- /api/v1/media          -> media-service (:3005)     [authenticated, routes stubbed]
+```mermaid
+flowchart LR
+    Client(["Browser / API Client"]) --> GW["Gateway :3000\n(JWT verify, header injection)"]
 
-Redis Streams (async, decoupled from write paths):
-  user-service          --publishes--> user:events
-  complaint-service     --publishes--> complaints:events (via outbox worker)
-  admin-service         --publishes--> complaints:events (complaint.assigned)
-  notification-service  --consumes--> user:events, complaints:events
+    GW -->|"/api/v1/users\npublic: register/login/refresh"| US["user-service :3001"]
+    GW -->|"/api/v1/complaints"| CS["complaint-service :3002"]
+    GW -->|"/api/v1/admin\nADMIN / SUPERADMIN only"| AS["admin-service :3003"]
+    GW -->|"/api/v1/notifications"| NS["notification-service :3004"]
+    GW -->|"/api/v1/media\nstubbed — returns 501"| MS["media-service :3005"]
 
-Each backend service owns its own PostgreSQL database (postgres-users, postgres-complaints,
-postgres-admin, postgres-notifications). media-service depends on MinIO for object storage.
+    US --> PGU[("postgres-users")]
+    CS --> PGC[("postgres-complaints")]
+    AS --> PGA[("postgres-admin")]
+    NS --> PGN[("postgres-notifications")]
+    MS -.->|"wired, not implemented"| MinIO[("MinIO")]
+```
+
+Async work is decoupled from the write path via Redis Streams, using a consumer-group model with idempotency keys and stale-message reclaim (`XAUTOCLAIM`). Complaint events are published through a transactional **outbox** table, so event delivery can never drift from what was actually committed to the database.
+
+```mermaid
+flowchart LR
+    US2["user-service"] -->|"user.registered"| UE[("user:events")]
+    CS2["complaint-service\n(outbox worker, polls 500ms)"] -->|"complaint.created\nstatus changed"| CE[("complaints:events")]
+    AS2["admin-service"] -->|"complaint.assigned"| CE
+
+    UE --> NSc["notification-service\n(notification-user-group)"]
+    CE --> NSc2["notification-service\n(notification-group)"]
+
+    ME[("media:events")] -. "media.uploaded\n(no producer yet — media-service is a stub)" .-> CSc["complaint-service\n(media-link-group)"]
 ```
 
 **Key design decisions:**
@@ -66,6 +88,165 @@ postgres-admin, postgres-notifications). media-service depends on MinIO for obje
 | Outbox pattern for complaint events | Guarantees event publication is consistent with the DB write, not a separate fire-and-forget call |
 | Redis-backed JWT ID revocation + hashed refresh token rotation | Access tokens are revocable server-side; refresh tokens are never stored in plaintext |
 | Per-service database | No service can bypass another's domain boundary at the data layer |
+
+## Database Design
+
+Each service owns its schema outright — there are **no cross-database foreign keys**. Services that need to reference another service's entity (e.g. a complaint's `reporterId`, an assignment's `departmentId`) store the ID as a plain string and resolve it via API calls, not a DB-level join. This is the standard database-per-service trade-off: strong domain isolation in exchange for giving up referential integrity across boundaries.
+
+<details>
+<summary><strong>user-service</strong> — auth, sessions, notification preferences</summary>
+
+```mermaid
+erDiagram
+    USER ||--o{ REFRESH_TOKEN : has
+    USER ||--|| USER_PREFERENCE : has
+
+    USER {
+        string id PK
+        string email UK
+        string passwordHash
+        string role "CITIZEN | ADMIN | SUPERADMIN"
+        string phone
+        datetime createdAt
+        datetime updatedAt
+    }
+    REFRESH_TOKEN {
+        string id PK
+        string tokenHash UK
+        string userId FK
+        datetime expiresAt
+        boolean revoked
+        string family
+        datetime createdAt
+    }
+    USER_PREFERENCE {
+        string userId PK
+        boolean emailEnabled
+        boolean smsEnabled
+        boolean pushEnabled
+    }
+```
+</details>
+
+<details>
+<summary><strong>complaint-service</strong> — complaint lifecycle, status history, outbox</summary>
+
+```mermaid
+erDiagram
+    COMPLAINT ||--o{ STATUS_HISTORY : has
+    COMPLAINT ||--o{ ASSIGNMENT : has
+    COMPLAINT ||--o{ MEDIA_REF : has
+    COMPLAINT ||--o{ OUTBOX : emits
+
+    COMPLAINT {
+        string id PK
+        string reporterId "user-service User.id — no FK"
+        string category "POTHOLE | GARBAGE | WATER_LEAK | STREETLIGHT | OTHER"
+        string description
+        float lat
+        float lng
+        string status "OPEN | IN_PROGRESS | RESOLVED | CLOSED | REJECTED"
+        string priority "LOW | MEDIUM | HIGH | CRITICAL"
+        datetime createdAt
+        datetime updatedAt
+    }
+    STATUS_HISTORY {
+        string id PK
+        string complaintId FK
+        string fromStatus
+        string toStatus
+        string changedBy
+        string reason
+        datetime changedAt
+    }
+    ASSIGNMENT {
+        string id PK
+        string complaintId FK
+        string departmentId "admin-service Department.id — no FK"
+        string assignedBy
+        datetime assignedAt
+    }
+    MEDIA_REF {
+        string id PK
+        string complaintId FK
+        string mediaUrl
+        string thumbnailUrl
+        string mediaType
+    }
+    OUTBOX {
+        string id PK
+        string eventType
+        string payload "JSON string"
+        boolean published
+        datetime createdAt
+        datetime publishedAt
+    }
+```
+</details>
+
+<details>
+<summary><strong>admin-service</strong> — departments, staffing, assignment, SLA rules</summary>
+
+```mermaid
+erDiagram
+    DEPARTMENT ||--o{ ADMIN_USER : staffed_by
+    DEPARTMENT ||--o{ ASSIGNMENT : receives
+
+    DEPARTMENT {
+        string id PK
+        string name UK
+        string zone
+        string contactEmail
+        datetime createdAt
+    }
+    ADMIN_USER {
+        string id PK
+        string userId "user-service User.id — no FK"
+        string departmentId FK
+        string level "OFFICER | MANAGER | DIRECTOR"
+    }
+    ASSIGNMENT {
+        string id PK
+        string complaintId "complaint-service Complaint.id — no FK"
+        string departmentId FK
+        string assignedBy
+        datetime assignedAt
+    }
+    SLA_RULE {
+        string id PK
+        string category
+        string priority
+        int resolutionHours
+    }
+```
+
+Note: `Assignment` exists in **both** complaint-service and admin-service — each service keeps its own record of the same real-world fact for its own querying needs, correlated by `complaintId`/`departmentId` rather than a shared table.
+</details>
+
+<details>
+<summary><strong>notification-service</strong> — notification log, delivery preferences</summary>
+
+```mermaid
+erDiagram
+    NOTIFICATION_LOG {
+        string id PK
+        string userId "user-service User.id — no FK"
+        string eventType
+        string channel
+        string payload
+        string status
+        string errorMessage
+        datetime sentAt
+        boolean read
+    }
+    NOTIFICATION_PREFERENCE {
+        string userId PK "user-service User.id — no FK"
+        boolean emailEnabled
+        boolean smsEnabled
+        boolean pushEnabled
+    }
+```
+</details>
 
 ## Features
 
@@ -99,7 +280,6 @@ apps/
   notification-service/  Notification logs, preferences, stream consumers
   media-service/         Health/readiness only — routes stubbed
   web/                   Vite + React frontend
-  docs/                  Next.js docs app
 
 packages/
   shared-types/          Shared enums, Zod schemas, API/event contracts
@@ -133,7 +313,7 @@ This starts all four Postgres instances, Redis, MinIO, Adminer, all five backend
 
 ## Environment Variables
 
-Each service reads its own `.env`; see the corresponding `.env.example` (where present) or `.env.<service>` (used by Docker Compose) in the repo. Consolidated required variables:
+Each service reads its own `.env`; see the corresponding `.env.example` in each `apps/<service>` directory, or the root `.env.example` used by Docker Compose. Consolidated required variables:
 
 | Service | Required | Notes |
 |---|---|---|
@@ -189,7 +369,11 @@ Full per-service route lists (individual endpoints for complaint status updates,
 
 Being direct about this rather than leaving it implicit:
 
-- **No automated test suite yet** — service `test` scripts are placeholders; `shared-types` runs lint as its test. Integration coverage exists only via `scripts/smoke-test.sh`.
+- **No automated test suite yet** — service `test` scripts are placeholders; `shared-types` runs lint as its test. Integration coverage exists only via `scripts/smoke-test.sh`, and CI only runs unit tests for `user-service`, `complaint-service`, and `shared-types`.
 - **No OpenAPI/Swagger docs** — route contracts are readable from source but not machine-generated yet.
-- **`media-service` is scaffolded, not implemented** — health/readiness endpoints work, upload routes return `501`.
-- **No LICENSE file** — currently all-rights-reserved by default; add one before treating this as open source.
+- **`media-service` is scaffolded, not implemented** — health/readiness endpoints work, upload routes return `501`, and the `media:events` stream has a consumer (complaint-service) but no producer yet.
+- **SMS notifications are a stub** — `notification-service` logs the outgoing message to the console instead of calling a real provider (Twilio env vars are present but unused).
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
